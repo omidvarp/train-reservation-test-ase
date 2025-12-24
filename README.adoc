@@ -1,0 +1,133 @@
+= Small train reservation library
+
+
+This project provides a small library that can be used to build a simple train reservation system.
+It provides a way to create trains, cities, trips, and tickets.
+The library makes sure that trips are consistent with each other (eg. no overlapping), and provides management facilities such as a way to delay a trip.
+
+The library is written in Java and can be compiled using Maven.
+
+== Compilation
+
+To compile the project, run:
+
+```
+mvn package
+```
+
+== Usage
+
+
+=== Configuring the system instance
+
+Using this library requires creating a central and unique object of type `TicketReservationSystem`.
+This can be obtained with an instance of the class `TicketReservationSystemImpl`.
+
+Creating a `TicketReservationSystemImpl` requires choosing a time zone, which will be used by the system to parse all dates in methors called later on.
+
+```java
+// Choosing the time zone of the system, to parse times/dates
+// Here we use the time zone of the system
+ZoneId timeZone = ZoneId.systemDefault();
+
+// Creating the system
+TicketReservationSystem system = new TicketReservationSystemImpl(timeZone);
+```
+
+Once a system is created, it must be populated with basic information, such as cities and trains.
+
+```java
+// Creating and adding cities in the system
+City rennesCity = new CityImpl("Rennes");
+City nantesCity = new CityImpl("Nantes");
+system.addCity(rennesCity);
+system.addCity(nantesCity);
+
+// Creating and adding trains in the system
+Train smallTrain = new TrainImpl("Small Train", 2);
+Train biggerTrain = new TrainImpl("Bigger Train", 10);
+system.addTrain(smallTrain);
+system.addTrain(biggerTrain);
+```
+
+
+=== Create a trip
+
+The main purpose of the library is to manage _trips_.
+This requires specifying what is the start date and the arrival date of the trip, along with the starting and arrival cities, and the train used for the trip. 
+Many constraints are verified when a trip is created — see the documentation in the code for more information. 
+
+```java  
+Instant departure1 = TimeManagement.createInstant("2022-05-12 12:00", timeZone);
+Instant arrival1 = TimeManagement.createInstant("2022-05-12 13:00", timeZone);
+Instant departure2 = TimeManagement.createInstant("2022-05-12 15:00", timeZone);
+Instant arrival2 = TimeManagement.createInstant("2022-05-12 16:00", timeZone);
+try {
+    Trip trip1 = system.createTrip(rennesCity, nantesCity, smallTrain, departure1, arrival1);
+    Trip trip2 = system.createTrip(rennesCity, nantesCity, biggerTrain, departure2, arrival2);
+} catch (TripException e) {
+    // Do something if a constraint is unfulfilled
+}
+```
+
+=== Book, cancel, exchange tickets
+
+You can book a ticket for a passenger for a specific trip using a `Trip` object:
+
+```java
+try {
+    Ticket ticket1 = trip1.bookTicket("Alice");
+    Ticket ticket2 = trip1.bookTicket("Bob");
+} catch (ReservationException e) {
+    // Do something if reservation was not possible
+}
+```
+
+A ticket booked for a trip can be canceled like this:
+
+```java
+trip1.cancel(ticket1);
+```
+
+You can also find possible alternative trips for a ticket, and make an exchange :
+
+```java
+List<Trip> alternatives = system.findPossibleExchanges(ticket2);
+try {
+    ticket2.exchangeTicket(alternatives.get(0));
+} catch (ReservationException e) {
+    // Do something if the exchange is not possible
+}
+```
+
+
+=== Find available trips
+
+You can search existing trips with simple criteria:
+
+```java
+// Search all trips from a city, on a given day
+List<Trip> results1 = system.findAvailableTrips(rennesCity, LocalDate.of(2022, 5, 12));
+
+// Search only trip between two cities, on a given day
+List<Trip> results2 =system.findAvailableTrips(rennesCity, nantesCity, LocalDate.of(2022, 5, 12));
+```
+
+
+=== Cancel or delay a trip
+
+A trip can be canceled:
+
+```java
+system.cancelTrip(trip1);
+```
+
+A trip can be delayed:
+
+```java
+// Delay departure
+system.delayTripDeparture(trip2, Duration.ofHours(1));
+
+// Delay arrival
+system.delayTripArrival(trip2, Duration.ofMinutes(30));
+```
