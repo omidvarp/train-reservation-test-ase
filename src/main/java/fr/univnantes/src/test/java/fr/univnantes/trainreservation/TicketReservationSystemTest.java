@@ -1,10 +1,5 @@
 package fr.univnantes.trainreservation;
 
-import fr.univnantes.trainreservation.impl.TicketReservationSystemImpl;
-import fr.univnantes.trainreservation.model.City;
-import fr.univnantes.trainreservation.model.Train;
-import fr.univnantes.trainreservation.model.Trip;
-import fr.univnantes.trainreservation.model.Ticket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,88 +11,117 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TicketReservationSystemTest {
 
-    TicketReservationSystem system;
-    City paris;
-    City nantes;
-    Train train;
-    Trip trip;
+    private TicketReservationSystem system;
+    private City nantes;
+    private City paris;
+    private Train train;
+    private Trip trip;
 
     @BeforeEach
     void setUp() {
-        system = new TicketReservationSystemImpl(ZoneId.of("Europe/Paris"));
+        system = new TicketReservationSystemImpl(ZoneId.systemDefault());
 
-        paris = system.createCity("Paris");
-        nantes = system.createCity("Nantes");
+        nantes = system.addCity("Nantes");
+        paris = system.addCity("Paris");
 
-        train = system.createTrain("TGV-001", 100);
+        train = system.addTrain("TGV-001", 100);
 
-        trip = system.createTrip(
+        trip = system.addTrip(
                 train,
-                paris,
                 nantes,
+                paris,
                 LocalDateTime.now().plusDays(1),
                 LocalDateTime.now().plusDays(1).plusHours(2)
         );
     }
 
+    // 1️⃣ رزرو موفق بلیط
     @Test
-    void systemShouldBeCreatedSuccessfully() {
-        assertNotNull(system);
-    }
-
-    @Test
-    void cityShouldBeCreated() {
-        assertEquals("Paris", paris.getName());
-    }
-
-    @Test
-    void trainShouldBeCreatedWithCorrectCapacity() {
-        assertEquals(100, train.getCapacity());
-    }
-
-    @Test
-    void tripShouldBeCreatedSuccessfully() {
-        assertNotNull(trip);
-    }
-
-    @Test
-    void ticketShouldBeReservedSuccessfully() {
+    void shouldReserveTicketSuccessfully() {
         Ticket ticket = system.bookTicket(trip);
         assertNotNull(ticket);
     }
 
+    // 2️⃣ رزرو چند بلیط تا سقف ظرفیت
     @Test
-    void ticketShouldBeCancelledSuccessfully() {
+    void shouldReserveMultipleTicketsWithinCapacity() {
+        for (int i = 0; i < 100; i++) {
+            assertNotNull(system.bookTicket(trip));
+        }
+    }
+
+    // 3️⃣ رزرو بیش از ظرفیت (باید خطا دهد)
+    @Test
+    void shouldFailWhenTrainIsFull() {
+        for (int i = 0; i < 100; i++) {
+            system.bookTicket(trip);
+        }
+        assertThrows(IllegalStateException.class,
+                () -> system.bookTicket(trip));
+    }
+
+    // 4️⃣ لغو بلیط
+    @Test
+    void shouldCancelTicketSuccessfully() {
         Ticket ticket = system.bookTicket(trip);
         system.cancelTicket(ticket);
-        assertTrue(ticket.isCancelled());
+        assertTrue(ticket.isCanceled());
     }
 
+    // 5️⃣ تغییر بلیط
     @Test
-    void ticketShouldBeChangedSuccessfully() {
+    void shouldChangeTicketTrip() {
+        City lyon = system.addCity("Lyon");
+        Trip newTrip = system.addTrip(
+                train,
+                paris,
+                lyon,
+                LocalDateTime.now().plusDays(2),
+                LocalDateTime.now().plusDays(2).plusHours(3)
+        );
+
         Ticket ticket = system.bookTicket(trip);
-        Ticket newTicket = system.changeTicket(ticket, trip);
-        assertNotNull(newTicket);
+        system.changeTicket(ticket, newTrip);
+
+        assertEquals(newTrip, ticket.getTrip());
     }
 
+    // 6️⃣ جستجوی سفرهای موجود
     @Test
-    void shouldFindTripsBetweenCities() {
-        List<Trip> trips = system.findTrips(paris, nantes);
+    void shouldFindAvailableTrips() {
+        List<Trip> trips = system.findTrips(nantes, paris);
         assertFalse(trips.isEmpty());
     }
 
+    // 7️⃣ لغو سفر
     @Test
-    void tripShouldBeCancelled() {
+    void shouldCancelTrip() {
         system.cancelTrip(trip);
-        assertTrue(trip.isCancelled());
+        assertTrue(trip.isCanceled());
     }
 
+    // 8️⃣ رزرو بلیط روی سفر لغوشده باید ناموفق باشد
     @Test
-    void tripShouldBeDelayed() {
-        system.delayTrip(trip, 30);
-        assertTrue(trip.getDepartureTime().isAfter(
-                LocalDateTime.now().plusDays(1)
-        ));
+    void shouldNotAllowBookingCanceledTrip() {
+        system.cancelTrip(trip);
+        assertThrows(IllegalStateException.class,
+                () -> system.bookTicket(trip));
+    }
+
+    // 9️⃣ تأخیر سفر
+    @Test
+    void shouldDelayTrip() {
+        LocalDateTime newDeparture = trip.getDepartureTime().plusHours(1);
+        system.delayTrip(trip, newDeparture);
+
+        assertEquals(newDeparture, trip.getDepartureTime());
+    }
+
+    // 🔟 لغو بلیط نامعتبر
+    @Test
+    void shouldFailCancelingInvalidTicket() {
+        Ticket fakeTicket = new Ticket(trip);
+        assertThrows(IllegalArgumentException.class,
+                () -> system.cancelTicket(fakeTicket));
     }
 }
-
